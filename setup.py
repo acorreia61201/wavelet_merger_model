@@ -1,4 +1,4 @@
-#!/usr/bin.env python
+#!/usr/bin/env python
 """
 setup.py file to allow PyCBC to read in wavelet basis code as a plugin
 Author: Alex Correia
