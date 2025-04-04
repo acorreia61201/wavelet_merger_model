@@ -19,7 +19,9 @@ setup(
     keywords = ['pycbc', 'gravitational waves'],
     install_requires = [''],
     py_modules = ['wavelet'],
-    entry_points = {'pycbc.waveform.td': 'wavelet = wavelet:get_td_wavelet_basis',
-                    'pycbc.waveform.td': 'wavelet_basis = wavelet:get_td_wavelets'},
+    entry_points = {'pycbc.waveform.td': 
+                    ['wavelet = wavelet:get_td_wavelet_basis', 
+                     'wavelet_modes = wavelet:get_td_wavelets'],
+                    },
 )
 
