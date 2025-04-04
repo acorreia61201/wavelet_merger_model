@@ -122,14 +122,17 @@ def get_td_wavelet(amp, phi, f, tau, eta, start_time, end_time, dt):
     return hp, hc
 
 
-def wavelet_sum_base(input_params):
+def wavelet_sum_base(input_params, sum_basis=True):
     """Base function for returning a superposition of wavelets.
 
     Parameters
     ----------
     input_params : dict
-    	Dictionary of parameters for generating wavelets. See
-    	get_td_wavelet for list of params.
+        	Dictionary of parameters for generating wavelets. See
+        get_td_wavelet for list of params.
+    sum_basis : bool, optional
+        Flag whether to sum together the wavelets. If False, return the
+        individual wavelets. If True (default), return the sum of wavelets.
     """
     # parse parameters
     w, amps, freqs, taus, phis, etas = parse_params(**input_params)
@@ -143,27 +146,44 @@ def wavelet_sum_base(input_params):
     tlen = t_end - t_start
     if tlen < dt:
         raise NoWaveformError('Length of wavelet is less than one sample. ' +
-                              'Consider decreasing start time or increasing end time.')
+                              'Try decreasing start or increasing end time.')
     ilen = m.ceil(tlen/dt)
-    hp_out = TimeSeries(zeros(ilen, dtype=np.float64), delta_t=dt)
-    hc_out = TimeSeries(zeros(ilen, dtype=np.float64), delta_t=dt)
+    if sum_basis:
+        hp_out = TimeSeries(zeros(ilen, dtype=np.float64), delta_t=dt)
+        hc_out = TimeSeries(zeros(ilen, dtype=np.float64), delta_t=dt)
+    else:
+        out = {}
 
     # generate wavelets and add to out vectors
     for i in range(w):
         s = str(int(i+1))
-        hp, hc = get_td_wavelet(amps[s], phis[s], freqs[s], taus[s], etas[s], t_start, t_end, dt)
-        hp_out += hp
-        hc_out += hc
+        hp, hc = get_td_wavelet(amps[s], phis[s], freqs[s], taus[s], etas[s],
+                                t_start, t_end, dt)
+        if sum_basis:
+            hp_out += hp
+            hc_out += hc
+        else:
+            hp.start_time = -tlen
+            hc.start_time = -tlen
+            out[s] = (hp, hc)
 
-    ### set the end time as the zero point (assuming end time is tc for inspiral-merger models) ###
-    hp_out.start_time = -tlen
-    hc_out.start_time = -tlen
-    
-    return hp_out, hc_out
+    ### set the end time as the zero point (assuming end time is tc for
+    ### inspiral-merger models)
+    if sum_basis:
+        hp_out.start_time = -tlen
+        hc_out.start_time = -tlen
+        return hp_out, hc_out
+    else:
+        return out
 
-### Approximants ###################################################################
+### Approximants ##############################################################
 
 def get_td_wavelet_basis(**kwargs):
-    """Generate the time domain wavelet basis for a signal.
+    """Generate a sum of wavelets in the time domain.
     """
     return wavelet_sum_base(kwargs)
+
+def get_td_wavelets(**kwargs):
+    """Generate time domain wavelets.
+    """
+    return wavelet_sum_base(kwargs, sum_basis=False)
