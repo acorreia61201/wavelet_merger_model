@@ -119,6 +119,10 @@ def get_td_wavelet(amp, phi, f, tau, eta, start_time, end_time, dt):
     # retrieve the plus and cross polarizations
     hp = wf.real
     hc = -wf.imag
+    
+    # convert to time series
+    hp = TimeSeries(hp, delta_t=dt)
+    hc = TimeSeries(hc, delta_t=dt)
     return hp, hc
 
 
@@ -165,7 +169,7 @@ def wavelet_sum_base(input_params, sum_basis=True):
         else:
             hp.start_time = -tlen
             hc.start_time = -tlen
-            out[s] = (hp, hc)
+            out[s] = [hp, hc]
 
     ### set the end time as the zero point (assuming end time is tc for
     ### inspiral-merger models)
