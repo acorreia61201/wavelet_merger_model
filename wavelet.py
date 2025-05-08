@@ -114,11 +114,11 @@ def get_td_wavelet(amp, phi, f, tau, eta, start_time, end_time, dt):
     # evaluate the wavelet
     offset = t - eta
     nondim_offset = offset/tau
-    wf = amp*np.exp(-2*pi*1j*f*offset - nondim_offset*nondim_offset + 1j*phi)
+    wf = amp*np.exp(-2*pi*1j*f*offset - nondim_offset*nondim_offset - 1j*phi)
 
     # retrieve the plus and cross polarizations
     hp = wf.real
-    hc = -wf.imag
+    hc = wf.imag
     
     # convert to time series
     hp = TimeSeries(hp, delta_t=dt)
