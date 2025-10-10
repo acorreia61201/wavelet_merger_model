@@ -187,6 +187,8 @@ def wavelet_sum_base(input_params, sum_basis=True):
                               'length.')
 
     # the zero point is defined at the reference eta
+    if int(extra_args['wavelet_ref_index']) > w:
+        raise KeyError('Reference index exceeds number of wavelets')
     eta_ref = etas[extra_args['wavelet_ref_index']]
     t_start = -dur/2 - eta_ref
 
