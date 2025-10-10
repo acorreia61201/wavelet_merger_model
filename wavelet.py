@@ -27,6 +27,7 @@ def parse_params(**kwargs):
     taus = {}
     phis = {}
     etas = {}
+    extra_args = {}
 
     for i in range(w):
         s = str(int(i+1))
@@ -59,10 +60,20 @@ def parse_params(**kwargs):
             etas[s] = kwargs['eta' + s]
         except KeyError:
             raise ValueError(f'missing eta{s}')
+        
+        # extra args for signal length, tapering
+        extra_args['wavelet_ref_index'] = kwargs.get('wavelet_ref_index', '1')
+        extra_args['wavelet_tau_duration'] = kwargs.get('wavelet_tau_duration',
+                                                        5)
+        extra_args['wavelet_max_duration'] = kwargs.get('wavelet_max_duration',
+                                                        None)
+        extra_args['wavelet_taper'] = kwargs.get('wavelet_taper', None)
+        extra_args['wavelet_taper_duration'] = kwargs.get('wavelet_taper_duration',
+                                                        0)
 
-    return w, amps, freqs, taus, phis, etas
+    return w, amps, freqs, taus, phis, etas, extra_args
 
-def get_td_wavelet(amp, phi, f, tau, eta, start_time, end_time, dt):
+def get_td_wavelet(amp, phi, f, tau, eta, duration, dt):
     r"""Generate a single wavelet in the time domain.
         This uses the Morlet-Gabot formula as listed in arXiv:2108.09344:
 
@@ -76,29 +87,22 @@ def get_td_wavelet(amp, phi, f, tau, eta, start_time, end_time, dt):
     ----------
     amp : float
         The wavelet amplitude.
-
     phi : float
         The wavelet phase.
-
     f : float
         The wavelet frequency in Hz.
-
     tau : float
         The wavelet damping time in seconds.
-
     eta : float
-        The central time in seconds of the wavelet. This time corresponds to:
+        The central time in seconds of the wavelet, defined relative to the
+        coalescence time of the signal. This time corresponds to:
 
 	.. math::
 
 	   h_w(t = \eta_w) = A_w\exp (i \phi_w)
 
-    start_time : float
-        The start time in seconds of the wavelet.
-
-    end_time : float
-        The end time in seconds of the wavelet.
-
+    duration : float
+        The duration in seconds over which to generate the wavelet.
     dt : float
         The sample time in seconds of the waveform.
 
@@ -108,8 +112,8 @@ def get_td_wavelet(amp, phi, f, tau, eta, start_time, end_time, dt):
         The time domain plus and cross polarizations of the wavelet.
     """    
     # generate a time series for the wavelet
-    l = m.ceil((end_time - start_time)/dt)
-    t = np.linspace(start_time, end_time, l)
+    l = m.ceil(duration/dt)
+    t = np.linspace(-duration/2, duration/2, l)
 
     # evaluate the wavelet
     offset = t - eta
@@ -132,50 +136,121 @@ def wavelet_sum_base(input_params, sum_basis=True):
     Parameters
     ----------
     input_params : dict
-        	Dictionary of parameters for generating wavelets. See
+        Dictionary of parameters for generating wavelets. See
         get_td_wavelet for list of params.
     sum_basis : bool, optional
         Flag whether to sum together the wavelets. If False, return the
         individual wavelets. If True (default), return the sum of wavelets.
+        
+    Extra args for signal output (passed via input_params)
+    ------------------------------------------------------
+    wavelet_ref_index : str, optional
+        Specifies which wavelet index is used as the reference for generating
+        the signal. The signal window is defined such that 0 is positioned at
+        the peak time of the reference wavelet. Default '1'.
+    wavelet_tau_duration : float, optional
+        The duration of the signal, as a multiple of longest provided damping
+        time. Default 5.
+    wavelet_max_duration : float, optional
+        The maximum duration in seconds of the cumulative waveform. This
+        overrides wavelet_tau_duration, i.e. if tau_duration > max_duration,
+        the generated waveform will be max_duration long; otherwise, the
+        waveform will be tau_duration. Default 0, which ensures the tau
+        duration is used by default.
+    wavelet_taper : str or None, optional
+        Flag whether to taper the cumulative waveform using a Tukey window.
+        Accepts 'start', 'end', 'startend', or None if not tapering. Default
+        None.
+    wavelet_taper_duration : float, optional
+        Length in seconds of the taper window(s) if wavelet_taper is an
+        accepted string. Default 0.
     """
     # parse parameters
-    w, amps, freqs, taus, phis, etas = parse_params(**input_params)
+    w, amps, freqs, taus, phis, etas, extra_args = parse_params(**input_params)
     assert w > 0, "Must generate at least one wavelet in wavelet basis"
 
-    t_start = input_params['t_start']
-    t_end = input_params['t_end']
+    # determine the duration of the output wf
     dt = input_params['delta_t']
+    tau_dur = extra_args['wavelet_tau_duration'] * max(taus.values())
+    if extra_args['wavelet_max_duration'] is None:
+        dur  = tau_dur
+    else:
+        assert extra_args['wavelet_max_duration'] > dt, \
+            ("wavelet_max_duration must be greater than one sample if "
+             "specified")
+        dur = min(tau_dur, extra_args['wavelet_max_duration'])
+        
+    # catch whether duration is less than sample size
+    if dur < dt:
+        raise NoWaveformError('Length of waveform is less than one sample. '
+                              'Try increasing duration or decreasing sample '
+                              'length.')
+
+    # the zero point is defined at the reference eta
+    eta_ref = etas[extra_args['wavelet_ref_index']]
+    t_start = -dur/2 - eta_ref
 
     # allocate hp, hc vectors using the length of the segment
-    tlen = t_end - t_start
-    if tlen < dt:
-        raise NoWaveformError('Length of wavelet is less than one sample. ' +
-                              'Try decreasing start or increasing end time.')
-    ilen = m.ceil(tlen/dt)
+    ilen = m.ceil(dur/dt)
     if sum_basis:
-        hp_out = TimeSeries(zeros(ilen, dtype=np.float64), delta_t=dt)
-        hc_out = TimeSeries(zeros(ilen, dtype=np.float64), delta_t=dt)
+        hp_out = TimeSeries(zeros(ilen, dtype=np.float64), delta_t=dt,
+                            epoch=t_start)
+        hc_out = TimeSeries(zeros(ilen, dtype=np.float64), delta_t=dt,
+                            epoch=t_start)
     else:
         out = {}
+
+    # common function for tapering the waveforms
+    def taper_output(hp, loc, win_len):
+        if win_len > hp.duration:
+            raise ValueError(f'Window duration {win_len} is longer than '
+                             f'waveform duration {hp.duration}')
+        accept = ['start', 'end', 'startend', None]
+        if loc not in accept:
+            raise ValueError(f'Invalid wavelet_taper argument {loc}; '
+                             f'accepted values are: {accept}')
+        elif loc == None:
+            return hp
+        else:
+            # get length of window in samples
+            idx_len = m.ceil(win_len / hp.delta_t)
+            samps = np.arange(idx_len)
+            # set up a cosine function for the window
+            raw_taper = 1/2 * (1 - np.cos(pi*samps/idx_len))
+            if 'start' in loc:
+                # multiply the first samples by the raw taper
+                hp[:idx_len] *= raw_taper
+            if 'end' in loc:
+                # multiply the last samples by the raw taper
+                hp[len(hp) - idx_len:len(hp)] *= raw_taper[::-1]
+            return hp
+
+    wt = extra_args['wavelet_taper']
+    wtdur = extra_args['wavelet_taper_duration']
 
     # generate wavelets and add to out vectors
     for i in range(w):
         s = str(int(i+1))
-        hp, hc = get_td_wavelet(amps[s], phis[s], freqs[s], taus[s], etas[s],
-                                t_start, t_end, dt)
+        # generate each wavelet with eta relative to the first central time
+        hp, hc = get_td_wavelet(amps[s], phis[s], freqs[s], taus[s], 
+                                etas[s], dur, dt)
+        
+        # set times such that t = 0 corresponds to first wavelet's peak time
+        hp.start_time = t_start
+        hc.start_time = t_start
         if sum_basis:
             hp_out += hp
             hc_out += hc
         else:
-            hp.start_time = -tlen
-            hc.start_time = -tlen
+            # apply tapering to each wavelet
+            hp = taper_output(hp, wt, wtdur)
+            hc = taper_output(hc, wt, wtdur)
             out[s] = [hp, hc]
 
-    ### set the end time as the zero point (assuming end time is tc for
-    ### inspiral-merger models)
     if sum_basis:
-        hp_out.start_time = -tlen
-        hc_out.start_time = -tlen
+        # apply tapering to the wavelet sum
+        hp_out = taper_output(hp_out, wt, wtdur)
+        hc_out = taper_output(hc_out, wt, wtdur)
         return hp_out, hc_out
     else:
         return out
