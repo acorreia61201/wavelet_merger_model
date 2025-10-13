@@ -72,8 +72,9 @@ def parse_params(**kwargs):
             if 'eta' + s in kwargs.keys():
                 warnings.warn(f'Wavelet index {s} has a user input but is also '
                               f'defined as reference. Setting eta{s} to zero')
-            etas[s] = 0
+            kwargs['eta' + s] = 0
         try:
+            print(kwargs['eta' + s])
             etas[s] = kwargs['eta' + s]
         except KeyError:
             raise ValueError(f'missing eta{s}')
