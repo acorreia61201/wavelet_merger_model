@@ -36,9 +36,8 @@ def parse_params(**kwargs):
         raise KeyError('Reference index exceeds number of wavelets')
     extra_args['wavelet_tau_duration'] = kwargs.get('wavelet_tau_duration',
                                                     5)
-    extra_args['wavelet_max_duration'] = kwargs.get('wavelet_max_duration',
-                                                    None)
-    extra_args['wavelet_taper'] = kwargs.get('wavelet_taper', None)
+    extra_args['wavelet_max_duration'] = kwargs.get('wavelet_max_duration')
+    extra_args['wavelet_taper'] = str(kwargs.get('wavelet_taper'))
     extra_args['wavelet_taper_duration'] = kwargs.get('wavelet_taper_duration',
                                                       0)
 
@@ -214,13 +213,12 @@ def wavelet_sum_base(input_params, sum_basis=True):
             raise ValueError(f'Window duration {win_len} is longer than '
                              f'waveform duration {hp.duration}')
         accept = ['start', 'end', 'startend', None]
-        print(loc, accept[2])
-        print(type(loc), type(accept[2]))
-        if loc not in accept:
-            raise ValueError(f'Invalid wavelet_taper argument {loc}; '
-                             f'accepted values are: {accept}')
-        elif loc == None:
+        if loc == None:
             return hp
+        # FIXME: loc not in accept doesn't work; string gets read in w/ quotes
+        elif 'start' not in loc and 'end' not in loc:
+            raise ValueError(f"Taper argument {loc} not accepted; "
+                             f"accepted args are: {accept}")
         else:
             # get length of window in samples
             idx_len = m.ceil(win_len / hp.delta_t)
