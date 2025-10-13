@@ -214,6 +214,8 @@ def wavelet_sum_base(input_params, sum_basis=True):
             raise ValueError(f'Window duration {win_len} is longer than '
                              f'waveform duration {hp.duration}')
         accept = ['start', 'end', 'startend', None]
+        print(loc, accept[2])
+        print(type(loc), type(accept[2]))
         if loc not in accept:
             raise ValueError(f'Invalid wavelet_taper argument {loc}; '
                              f'accepted values are: {accept}')
