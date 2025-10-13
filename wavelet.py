@@ -9,6 +9,7 @@ import numpy as np
 import math as m
 from pycbc.types import TimeSeries, zeros
 from pycbc.waveform import NoWaveformError
+import warnings
 
 pi = np.pi
 
@@ -29,8 +30,21 @@ def parse_params(**kwargs):
     etas = {}
     extra_args = {}
 
+    # extra args for signal length, tapering
+    extra_args['wavelet_ref_index'] = kwargs.get('wavelet_ref_index', '1')
+    if int(extra_args['wavelet_ref_index']) > w:
+        raise KeyError('Reference index exceeds number of wavelets')
+    extra_args['wavelet_tau_duration'] = kwargs.get('wavelet_tau_duration',
+                                                    5)
+    extra_args['wavelet_max_duration'] = kwargs.get('wavelet_max_duration',
+                                                    None)
+    extra_args['wavelet_taper'] = kwargs.get('wavelet_taper', None)
+    extra_args['wavelet_taper_duration'] = kwargs.get('wavelet_taper_duration',
+                                                      0)
+
     for i in range(w):
         s = str(int(i+1))
+        
         # amplitude
         try:
             amps[s] = kwargs['amp' + s]
@@ -56,20 +70,15 @@ def parse_params(**kwargs):
             raise ValueError(f'missing phi{s}')
 
     	# ref times
+        if s == extra_args['wavelet_ref_index']:
+            if 'eta' + s in kwargs.keys():
+                warnings.warn(f'Wavelet index {s} has a user input but is also '
+                              f'defined as reference. Setting eta{s} to zero')
+            kwargs['eta' + s] = 0
         try:
             etas[s] = kwargs['eta' + s]
         except KeyError:
             raise ValueError(f'missing eta{s}')
-        
-        # extra args for signal length, tapering
-        extra_args['wavelet_ref_index'] = kwargs.get('wavelet_ref_index', '1')
-        extra_args['wavelet_tau_duration'] = kwargs.get('wavelet_tau_duration',
-                                                        5)
-        extra_args['wavelet_max_duration'] = kwargs.get('wavelet_max_duration',
-                                                        None)
-        extra_args['wavelet_taper'] = kwargs.get('wavelet_taper', None)
-        extra_args['wavelet_taper_duration'] = kwargs.get('wavelet_taper_duration',
-                                                        0)
 
     return w, amps, freqs, taus, phis, etas, extra_args
 
@@ -94,8 +103,8 @@ def get_td_wavelet(amp, phi, f, tau, eta, duration, dt):
     tau : float
         The wavelet damping time in seconds.
     eta : float
-        The central time in seconds of the wavelet, defined relative to the
-        coalescence time of the signal. This time corresponds to:
+        The central time in seconds of the wavelet, defined relative to zero 
+        (the coalescence time in the detector frame). This time corresponds to:
 
 	.. math::
 
@@ -146,8 +155,10 @@ def wavelet_sum_base(input_params, sum_basis=True):
     ------------------------------------------------------
     wavelet_ref_index : str, optional
         Specifies which wavelet index is used as the reference for generating
-        the signal. The signal window is defined such that 0 is positioned at
-        the peak time of the reference wavelet. Default '1'.
+        the signal. This sets the peak time of the reference wavelet equal to
+        zero, at the center of the generated window. If an eta is provided for
+        the specified reference wavelet, that input is overriden, so that the 
+        reference is at zero no matter what. Default '1'.
     wavelet_tau_duration : float, optional
         The duration of the signal, as a multiple of longest provided damping
         time. Default 5.
@@ -173,24 +184,19 @@ def wavelet_sum_base(input_params, sum_basis=True):
     dt = input_params['delta_t']
     tau_dur = extra_args['wavelet_tau_duration'] * max(taus.values())
     if extra_args['wavelet_max_duration'] is None:
-        dur  = tau_dur
+        dur = tau_dur
     else:
         assert extra_args['wavelet_max_duration'] > dt, \
             ("wavelet_max_duration must be greater than one sample if "
              "specified")
         dur = min(tau_dur, extra_args['wavelet_max_duration'])
+    t_start = -dur/2
         
     # catch whether duration is less than sample size
     if dur < dt:
         raise NoWaveformError('Length of waveform is less than one sample. '
                               'Try increasing duration or decreasing sample '
                               'length.')
-
-    # the zero point is defined at the reference eta
-    if int(extra_args['wavelet_ref_index']) > w:
-        raise KeyError('Reference index exceeds number of wavelets')
-    eta_ref = etas[extra_args['wavelet_ref_index']]
-    t_start = -dur/2 - eta_ref
 
     # allocate hp, hc vectors using the length of the segment
     ilen = m.ceil(dur/dt)
