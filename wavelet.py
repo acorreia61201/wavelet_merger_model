@@ -31,13 +31,12 @@ def parse_params(**kwargs):
     extra_args = {}
 
     # extra args for signal length, tapering
-    extra_args['wavelet_ref_index'] = kwargs.get('wavelet_ref_index', '1')
-    if int(extra_args['wavelet_ref_index']) > w:
+    extra_args['wavelet_ref_index'] = int(kwargs.get('wavelet_ref_index', 1))
+    if extra_args['wavelet_ref_index'] > w:
         raise KeyError('Reference index exceeds number of wavelets')
-    extra_args['wavelet_tau_duration'] = kwargs.get('wavelet_tau_duration',
-                                                    5)
+    extra_args['wavelet_tau_duration'] = kwargs.get('wavelet_tau_duration', 5)
     extra_args['wavelet_max_duration'] = kwargs.get('wavelet_max_duration')
-    extra_args['wavelet_taper'] = str(kwargs.get('wavelet_taper'))
+    extra_args['wavelet_taper'] = kwargs.get('wavelet_taper')
     extra_args['wavelet_taper_duration'] = kwargs.get('wavelet_taper_duration',
                                                       0)
 
@@ -69,7 +68,7 @@ def parse_params(**kwargs):
             raise ValueError(f'missing phi{s}')
 
     	# ref times
-        if s == extra_args['wavelet_ref_index']:
+        if int(s) == int(extra_args['wavelet_ref_index']):
             if 'eta' + s in kwargs.keys():
                 warnings.warn(f'Wavelet index {s} has a user input but is also '
                               f'defined as reference. Setting eta{s} to zero')
