@@ -209,7 +209,7 @@ def wavelet_sum_base(input_params, sum_basis=True):
 
     # common function for tapering the waveforms
     def taper_output(hp, loc, win_len):
-        if win_len > hp.duration:
+        if float(win_len) > float(hp.duration):
             raise ValueError(f'Window duration {win_len} is longer than '
                              f'waveform duration {hp.duration}')
         accept = ['start', 'end', 'startend', None]
