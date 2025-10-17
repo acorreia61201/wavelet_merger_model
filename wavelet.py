@@ -34,7 +34,7 @@ def parse_params(**kwargs):
     extra_args['wavelet_ref_index'] = int(kwargs.get('wavelet_ref_index', 1))
     if extra_args['wavelet_ref_index'] > w:
         raise KeyError('Reference index exceeds number of wavelets')
-    extra_args['wavelet_tau_duration'] = kwargs.get('wavelet_tau_duration', 5)
+    extra_args['wavelet_tau_duration'] = kwargs.get('wavelet_tau_duration')
     extra_args['wavelet_max_duration'] = kwargs.get('wavelet_max_duration')
     extra_args['wavelet_taper'] = kwargs.get('wavelet_taper')
     extra_args['wavelet_taper_duration'] = kwargs.get('wavelet_taper_duration',
@@ -74,7 +74,6 @@ def parse_params(**kwargs):
                               f'defined as reference. Setting eta{s} to zero')
             kwargs['eta' + s] = 0
         try:
-            print(kwargs['eta' + s])
             etas[s] = kwargs['eta' + s]
         except KeyError:
             raise ValueError(f'missing eta{s}')
@@ -181,14 +180,22 @@ def wavelet_sum_base(input_params, sum_basis=True):
 
     # determine the duration of the output wf
     dt = input_params['delta_t']
-    tau_dur = extra_args['wavelet_tau_duration'] * max(taus.values())
     if extra_args['wavelet_max_duration'] is None:
-        dur = tau_dur
+        if extra_args['wavelet_tau_duration'] is None:
+            dur = 5 * max(taus.values())
+        else:
+            dur = extra_args['wavelet_tau_duration'] * max(taus.values())
+        
     else:
-        assert extra_args['wavelet_max_duration'] > dt, \
-            ("wavelet_max_duration must be greater than one sample if "
-             "specified")
-        dur = min(tau_dur, extra_args['wavelet_max_duration'])
+        dur = extra_args['wavelet_max_duration']
+        assert dur > dt, ("wavelet_max_duration must be greater than one " + 
+                          "sample if specified")
+        if extra_args['wavelet_tau_duration'] is not None:
+            warnings.warn('wavelet_max_duration and wavelet_tau_duration are '
+                          'both specified. Setting duration to min of these '
+                          'values')
+            tau_dur = extra_args['wavelet_tau_duration'] * max(taus.values())
+            dur = min(tau_dur, dur)
     t_start = -dur/2
         
     # catch whether duration is less than sample size
