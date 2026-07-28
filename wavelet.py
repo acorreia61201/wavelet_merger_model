@@ -77,10 +77,16 @@ def parse_params(**kwargs):
             etas[s] = kwargs['eta' + s]
         except KeyError:
             raise ValueError(f'missing eta{s}')
+        
+        # store optional args in extra_args and assert they are in domain
+        extra_args['eps' + s] = kwargs.get('eps' + s, 1)
+        assert extra_args['eps' + s] >= 0, ('Epsilon must be in [0, 1]; '
+                                           f'received {extra_args["eps" + s]}')
+        extra_args['theta' + s] = kwargs.get('theta' + s, 0)
 
     return w, amps, freqs, taus, phis, etas, extra_args
 
-def get_td_wavelet(amp, phi, f, tau, eta, duration, dt):
+def get_td_wavelet(amp, phi, f, tau, eta, duration, dt, eps=1, theta=0):
     r"""Generate a single wavelet in the time domain.
         This uses the Morlet-Gabot formula as listed in arXiv:2108.09344:
 
@@ -112,6 +118,13 @@ def get_td_wavelet(amp, phi, f, tau, eta, duration, dt):
         The duration in seconds over which to generate the wavelet.
     dt : float
         The sample time in seconds of the waveform.
+    eps : float (optional)
+        The ellipticity of the plus and cross polarizations. Ranges between 0
+        (for linear polarization) and 1 (for circular polarization). Default 1.
+    theta : float (optional)
+        The rotation factor by which to convert the cosine and sine quadratures
+        to plus and cross polarizations. By default, assume the cosine
+        quadrature is the + and sine is the x.
 
     Returns
     -------
@@ -127,9 +140,13 @@ def get_td_wavelet(amp, phi, f, tau, eta, duration, dt):
     nondim_offset = offset/tau
     wf = amp*np.exp(-2*pi*1j*f*offset - nondim_offset*nondim_offset - 1j*phi)
 
-    # retrieve the plus and cross polarizations
-    hp = wf.real
-    hc = wf.imag
+    # retrieve the cosine and sine quadratures polarizations
+    hcos = wf.real
+    hsin = wf.imag * eps
+    
+    # convert to plus and cross polarizations
+    hp = hcos * np.cos(theta) - hsin * np.sin(theta)
+    hc = hcos * np.sin(theta) + hsin * np.cos(theta)
     
     # convert to time series
     hp = TimeSeries(hp, delta_t=dt)
@@ -176,6 +193,7 @@ def wavelet_sum_base(input_params, sum_basis=True):
     """
     # parse parameters
     w, amps, freqs, taus, phis, etas, extra_args = parse_params(**input_params)
+    print(extra_args)
     assert w > 0, "Must generate at least one wavelet in wavelet basis"
 
     # determine the duration of the output wf
@@ -248,8 +266,10 @@ def wavelet_sum_base(input_params, sum_basis=True):
         s = str(int(i+1))
         # generate each wavelet with eta relative to the first central time
         hp, hc = get_td_wavelet(amps[s], phis[s], freqs[s], taus[s], 
-                                etas[s], dur, dt)
-        
+                                etas[s], dur, dt, 
+                                eps=extra_args['eps' + s],
+                                theta=extra_args['theta' + s])
+
         # set times such that t = 0 corresponds to first wavelet's peak time
         hp.start_time = t_start
         hc.start_time = t_start
