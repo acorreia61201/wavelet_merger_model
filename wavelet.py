@@ -193,7 +193,6 @@ def wavelet_sum_base(input_params, sum_basis=True):
     """
     # parse parameters
     w, amps, freqs, taus, phis, etas, extra_args = parse_params(**input_params)
-    print(extra_args)
     assert w > 0, "Must generate at least one wavelet in wavelet basis"
 
     # determine the duration of the output wf
