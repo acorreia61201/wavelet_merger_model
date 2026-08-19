@@ -133,13 +133,13 @@ def get_td_wavelet(amp, phi, f, tau, eta, duration, dt, eps=1, theta=0):
     """
     # generate a time series for the wavelet
     l = m.ceil(duration/dt)
-    t = np.linspace(-duration/2, duration/2, l)
+    t = np.linspace(0, duration, l)
 
     # evaluate the wavelet
     offset = t - eta
     nondim_offset = offset/tau
     # wf = amp*np.exp(-2*pi*1j*f*offset - nondim_offset*nondim_offset - 1j*phi)
-    wf = amp*np.exp(-2*pi*1j*f*offset - nondim_offset - 1j*phi)
+    wf = amp*np.exp(2*pi*1j*f*offset - nondim_offset + 1j*phi)
 
     # retrieve the cosine and sine quadratures polarizations
     hcos = wf.real
@@ -214,7 +214,7 @@ def wavelet_sum_base(input_params, sum_basis=True):
                           'values')
             tau_dur = extra_args['wavelet_tau_duration'] * max(taus.values())
             dur = min(tau_dur, dur)
-    t_start = -dur/2
+    t_start = 0.
 
     # catch whether duration is less than sample size
     if dur < dt:
