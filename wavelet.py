@@ -80,7 +80,7 @@ def parse_params(**kwargs):
         
         # store optional args in extra_args and assert they are in domain
         extra_args['eps' + s] = kwargs.get('eps' + s, 1)
-        assert extra_args['eps' + s] >= 0, ('Epsilon must be in [0, 1]; '
+        assert np.abs(extra_args['eps' + s]) <= 1, ('Epsilon must be in [-1, 1]; '
                                            f'received {extra_args["eps" + s]}')
         extra_args['theta' + s] = kwargs.get('theta' + s, 0)
 
