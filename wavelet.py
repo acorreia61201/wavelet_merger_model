@@ -42,7 +42,7 @@ def parse_params(**kwargs):
 
     for i in range(w):
         s = str(int(i+1))
-        
+
         # amplitude
         try:
             amps[s] = kwargs['amp' + s]
@@ -77,7 +77,7 @@ def parse_params(**kwargs):
             etas[s] = kwargs['eta' + s]
         except KeyError:
             raise ValueError(f'missing eta{s}')
-        
+
         # store optional args in extra_args and assert they are in domain
         extra_args['eps' + s] = kwargs.get('eps' + s, 1)
         assert np.abs(extra_args['eps' + s]) <= 1, ('Epsilon must be in [-1, 1]; '
@@ -130,7 +130,7 @@ def get_td_wavelet(amp, phi, f, tau, eta, duration, dt, eps=1, theta=0):
     -------
     (array, array)
         The time domain plus and cross polarizations of the wavelet.
-    """    
+    """
     # generate a time series for the wavelet
     l = m.ceil(duration/dt)
     t = np.linspace(-duration/2, duration/2, l)
@@ -138,16 +138,17 @@ def get_td_wavelet(amp, phi, f, tau, eta, duration, dt, eps=1, theta=0):
     # evaluate the wavelet
     offset = t - eta
     nondim_offset = offset/tau
-    wf = amp*np.exp(-2*pi*1j*f*offset - nondim_offset*nondim_offset - 1j*phi)
+    # wf = amp*np.exp(-2*pi*1j*f*offset - nondim_offset*nondim_offset - 1j*phi)
+    wf = amp*np.exp(-2*pi*1j*f*offset - nondim_offset - 1j*phi)
 
     # retrieve the cosine and sine quadratures polarizations
     hcos = wf.real
     hsin = wf.imag * eps
-    
+
     # convert to plus and cross polarizations
     hp = hcos * np.cos(theta) - hsin * np.sin(theta)
     hc = hcos * np.sin(theta) + hsin * np.cos(theta)
-    
+
     # convert to time series
     hp = TimeSeries(hp, delta_t=dt)
     hc = TimeSeries(hc, delta_t=dt)
@@ -165,7 +166,7 @@ def wavelet_sum_base(input_params, sum_basis=True):
     sum_basis : bool, optional
         Flag whether to sum together the wavelets. If False, return the
         individual wavelets. If True (default), return the sum of wavelets.
-        
+
     Extra args for signal output (passed via input_params)
     ------------------------------------------------------
     wavelet_ref_index : str, optional
@@ -202,7 +203,7 @@ def wavelet_sum_base(input_params, sum_basis=True):
             dur = 5 * max(taus.values())
         else:
             dur = extra_args['wavelet_tau_duration'] * max(taus.values())
-        
+
     else:
         dur = extra_args['wavelet_max_duration']
         assert dur > dt, ("wavelet_max_duration must be greater than one " + 
@@ -214,7 +215,7 @@ def wavelet_sum_base(input_params, sum_basis=True):
             tau_dur = extra_args['wavelet_tau_duration'] * max(taus.values())
             dur = min(tau_dur, dur)
     t_start = -dur/2
-        
+
     # catch whether duration is less than sample size
     if dur < dt:
         raise NoWaveformError('Length of waveform is less than one sample. '
